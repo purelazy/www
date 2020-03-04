@@ -1,0 +1,328 @@
+<pre class="hljs" style="display: block; overflow-x: auto; padding: 0.5em; background: rgb(240, 240, 240); color: rgb(68, 68, 68);"><span class="hljs-keyword" style="font-weight: 700;">package</span> main
+
+<span class="hljs-keyword" style="font-weight: 700;">import</span> (
+	<span class="hljs-string" style="color: rgb(136, 0, 0);">"fmt"</span>
+
+	<span class="hljs-string" style="color: rgb(136, 0, 0);">"runtime"</span>
+	<span class="hljs-string" style="color: rgb(136, 0, 0);">"strings"</span>
+	<span class="hljs-string" style="color: rgb(136, 0, 0);">"unsafe"</span>
+
+	<span class="hljs-string" style="color: rgb(136, 0, 0);">"github.com/go-gl/gl/v4.6-core/gl"</span>
+	<span class="hljs-string" style="color: rgb(136, 0, 0);">"github.com/go-gl/glfw/v3.3/glfw"</span>
+)
+
+<span class="hljs-function"><span class="hljs-keyword" style="font-weight: 700;">func</span> <span class="hljs-title" style="color: rgb(136, 0, 0); font-weight: 700;">getWindowFromGLFW</span><span class="hljs-params">(title <span class="hljs-keyword" style="font-weight: 700;">string</span>)</span> *<span class="hljs-title" style="color: rgb(136, 0, 0); font-weight: 700;">glfw</span>.<span class="hljs-title" style="color: rgb(136, 0, 0); font-weight: 700;">Window</span></span> {
+	runtime.LockOSThread()
+
+	<span class="hljs-keyword" style="font-weight: 700;">if</span> err := glfw.Init(); err != <span class="hljs-literal" style="color: rgb(120, 169, 96);">nil</span> {
+		<span class="hljs-built_in" style="color: rgb(57, 115, 0);">panic</span>(fmt.Errorf(<span class="hljs-string" style="color: rgb(136, 0, 0);">"could not initialize glfw: %v"</span>, err))
+	}
+
+	glfw.WindowHint(glfw.ContextVersionMajor, <span class="hljs-number" style="color: rgb(136, 0, 0);">4</span>)
+	glfw.WindowHint(glfw.ContextVersionMinor, <span class="hljs-number" style="color: rgb(136, 0, 0);">6</span>)
+	glfw.WindowHint(glfw.Resizable, glfw.True)
+	glfw.WindowHint(glfw.OpenGLProfile, glfw.OpenGLCoreProfile)
+	glfw.WindowHint(glfw.OpenGLForwardCompatible, glfw.True)
+
+	win, err := glfw.CreateWindow(<span class="hljs-number" style="color: rgb(136, 0, 0);">800</span>, <span class="hljs-number" style="color: rgb(136, 0, 0);">600</span>, title, <span class="hljs-literal" style="color: rgb(120, 169, 96);">nil</span>, <span class="hljs-literal" style="color: rgb(120, 169, 96);">nil</span>)
+
+	<span class="hljs-keyword" style="font-weight: 700;">if</span> err != <span class="hljs-literal" style="color: rgb(120, 169, 96);">nil</span> {
+		<span class="hljs-built_in" style="color: rgb(57, 115, 0);">panic</span>(fmt.Errorf(<span class="hljs-string" style="color: rgb(136, 0, 0);">"could not create opengl renderer: %v"</span>, err))
+	}
+
+	win.MakeContextCurrent()
+
+	<span class="hljs-keyword" style="font-weight: 700;">if</span> err := gl.Init(); err != <span class="hljs-literal" style="color: rgb(120, 169, 96);">nil</span> {
+		<span class="hljs-built_in" style="color: rgb(57, 115, 0);">panic</span>(err)
+	}
+
+	<span class="hljs-keyword" style="font-weight: 700;">return</span> win
+}
+
+<span class="hljs-keyword" style="font-weight: 700;">var</span> vertexShader = <span class="hljs-string" style="color: rgb(136, 0, 0);">`
+#version 430 core
+
+layout (location = 0) in vec4 vPosition;
+
+void main()
+{
+	gl_Position = vPosition;
+}
+`</span> + <span class="hljs-string" style="color: rgb(136, 0, 0);">"\x00"</span>
+
+<span class="hljs-keyword" style="font-weight: 700;">var</span> fragmentShader = <span class="hljs-string" style="color: rgb(136, 0, 0);">`
+#version 430 core
+
+out vec4 color;
+
+void main() {
+    color = vec4(0.0, 0.8, 1.0, 1.0);
+}
+`</span> + <span class="hljs-string" style="color: rgb(136, 0, 0);">"\x00"</span>
+
+<span class="hljs-function"><span class="hljs-keyword" style="font-weight: 700;">func</span> <span class="hljs-title" style="color: rgb(136, 0, 0); font-weight: 700;">compileShader</span><span class="hljs-params">(source <span class="hljs-keyword" style="font-weight: 700;">string</span>, shaderType <span class="hljs-keyword" style="font-weight: 700;">uint32</span>)</span> <span class="hljs-params">(<span class="hljs-keyword" style="font-weight: 700;">uint32</span>, error)</span></span> {
+	shader := gl.CreateShader(shaderType)
+
+	csources, free := gl.Strs(source)
+	gl.ShaderSource(shader, <span class="hljs-number" style="color: rgb(136, 0, 0);">1</span>, csources, <span class="hljs-literal" style="color: rgb(120, 169, 96);">nil</span>)
+	free()
+	gl.CompileShader(shader)
+
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">// Check for errors</span>
+	<span class="hljs-keyword" style="font-weight: 700;">var</span> status <span class="hljs-keyword" style="font-weight: 700;">int32</span>
+	gl.GetShaderiv(shader, gl.COMPILE_STATUS, &amp;status)
+	<span class="hljs-keyword" style="font-weight: 700;">if</span> status == gl.FALSE {
+		<span class="hljs-comment" style="color: rgb(136, 136, 136);">// How many bytes to allocate</span>
+		<span class="hljs-keyword" style="font-weight: 700;">var</span> logLength <span class="hljs-keyword" style="font-weight: 700;">int32</span>
+		gl.GetShaderiv(shader, gl.INFO_LOG_LENGTH, &amp;logLength)
+
+		log := strings.Repeat(<span class="hljs-string" style="color: rgb(136, 0, 0);">"\x00"</span>, <span class="hljs-keyword" style="font-weight: 700;">int</span>(logLength+<span class="hljs-number" style="color: rgb(136, 0, 0);">1</span>))
+
+		gl.GetShaderInfoLog(shader, logLength, <span class="hljs-literal" style="color: rgb(120, 169, 96);">nil</span>, gl.Str(log))
+		fmt.Println(<span class="hljs-string" style="color: rgb(136, 0, 0);">"compileShader log"</span>)
+		fmt.Println(log)
+
+		<span class="hljs-keyword" style="font-weight: 700;">return</span> <span class="hljs-number" style="color: rgb(136, 0, 0);">0</span>, fmt.Errorf(<span class="hljs-string" style="color: rgb(136, 0, 0);">"failed to compile %v: %v"</span>, source, log)
+	}
+
+	<span class="hljs-keyword" style="font-weight: 700;">return</span> shader, <span class="hljs-literal" style="color: rgb(120, 169, 96);">nil</span>
+}
+
+<span class="hljs-function"><span class="hljs-keyword" style="font-weight: 700;">func</span> <span class="hljs-title" style="color: rgb(136, 0, 0); font-weight: 700;">newProgram</span><span class="hljs-params">(vertexShaderSource, fragmentShaderSource <span class="hljs-keyword" style="font-weight: 700;">string</span>)</span> <span class="hljs-params">(<span class="hljs-keyword" style="font-weight: 700;">uint32</span>, error)</span></span> {
+	vertexShader, err := compileShader(vertexShaderSource, gl.VERTEX_SHADER)
+	<span class="hljs-keyword" style="font-weight: 700;">if</span> err != <span class="hljs-literal" style="color: rgb(120, 169, 96);">nil</span> {
+		fmt.Println(<span class="hljs-string" style="color: rgb(136, 0, 0);">"Vertex Compile Error"</span>)
+		fmt.Println(err)
+		<span class="hljs-keyword" style="font-weight: 700;">return</span> <span class="hljs-number" style="color: rgb(136, 0, 0);">0</span>, err
+	}
+
+	fragmentShader, err := compileShader(fragmentShaderSource, gl.FRAGMENT_SHADER)
+	<span class="hljs-keyword" style="font-weight: 700;">if</span> err != <span class="hljs-literal" style="color: rgb(120, 169, 96);">nil</span> {
+		<span class="hljs-keyword" style="font-weight: 700;">return</span> <span class="hljs-number" style="color: rgb(136, 0, 0);">0</span>, err
+	}
+
+	program := gl.CreateProgram()
+
+	gl.AttachShader(program, vertexShader)
+	gl.AttachShader(program, fragmentShader)
+	gl.LinkProgram(program)
+
+	<span class="hljs-keyword" style="font-weight: 700;">var</span> status <span class="hljs-keyword" style="font-weight: 700;">int32</span>
+	gl.GetProgramiv(program, gl.LINK_STATUS, &amp;status)
+	<span class="hljs-keyword" style="font-weight: 700;">if</span> status == gl.FALSE {
+		<span class="hljs-keyword" style="font-weight: 700;">var</span> logLength <span class="hljs-keyword" style="font-weight: 700;">int32</span>
+		gl.GetProgramiv(program, gl.INFO_LOG_LENGTH, &amp;logLength)
+
+		log := strings.Repeat(<span class="hljs-string" style="color: rgb(136, 0, 0);">"\x00"</span>, <span class="hljs-keyword" style="font-weight: 700;">int</span>(logLength+<span class="hljs-number" style="color: rgb(136, 0, 0);">1</span>))
+		gl.GetProgramInfoLog(program, logLength, <span class="hljs-literal" style="color: rgb(120, 169, 96);">nil</span>, gl.Str(log))
+
+		<span class="hljs-keyword" style="font-weight: 700;">return</span> <span class="hljs-number" style="color: rgb(136, 0, 0);">0</span>, fmt.Errorf(<span class="hljs-string" style="color: rgb(136, 0, 0);">"failed to link program: %v"</span>, log)
+	}
+
+	gl.DeleteShader(vertexShader)
+	gl.DeleteShader(fragmentShader)
+
+	<span class="hljs-keyword" style="font-weight: 700;">return</span> program, <span class="hljs-literal" style="color: rgb(120, 169, 96);">nil</span>
+}
+
+<span class="hljs-function"><span class="hljs-keyword" style="font-weight: 700;">func</span> <span class="hljs-title" style="color: rgb(136, 0, 0); font-weight: 700;">main</span><span class="hljs-params">()</span></span> {
+
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">//              |</span>
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">//              |</span>
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">// +-------------------------+</span>
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">// |                         |</span>
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">// |   Create a Window       |</span>
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">// |                         |</span>
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">// +------------|------------+</span>
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">//              |</span>
+
+	win := getWindowFromGLFW(<span class="hljs-string" style="color: rgb(136, 0, 0);">"Hello GoPenGLSLang"</span>)
+
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">//              |</span>
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">//              |</span>
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">// +-------------------------+</span>
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">// |                         |</span>
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">// |   Create the Shader     |</span>
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">// |                         |</span>
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">// +------------|------------+</span>
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">//              |</span>
+
+	shader, err := newProgram(vertexShader, fragmentShader)
+	<span class="hljs-keyword" style="font-weight: 700;">if</span> err != <span class="hljs-literal" style="color: rgb(120, 169, 96);">nil</span> {
+		<span class="hljs-built_in" style="color: rgb(57, 115, 0);">panic</span>(err)
+	}
+	<span class="hljs-keyword" style="font-weight: 700;">defer</span> gl.DeleteProgram(shader)
+
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">//              |</span>
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">//              |</span>
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">// +-------------------------+</span>
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">// |                         |</span>
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">// |   Load the Shader       |</span>
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">// |                         |</span>
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">// +------------|------------+</span>
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">//              |</span>
+
+	gl.UseProgram(shader)
+
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">//              |</span>
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">//              |</span>
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">// +-------------------------+</span>
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">// |                         |</span>
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">// | Define two triangles    |</span>
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">// | Requires 6 vertices     |</span>
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">// |                         |</span>
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">// +------------|------------+</span>
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">//              |</span>
+
+	<span class="hljs-keyword" style="font-weight: 700;">var</span> vertices = [<span class="hljs-number" style="color: rgb(136, 0, 0);">6</span>][<span class="hljs-number" style="color: rgb(136, 0, 0);">2</span>]<span class="hljs-keyword" style="font-weight: 700;">float32</span>{
+		<span class="hljs-comment" style="color: rgb(136, 136, 136);">// Triangle 1</span>
+		{<span class="hljs-number" style="color: rgb(136, 0, 0);">-0.90</span>, <span class="hljs-number" style="color: rgb(136, 0, 0);">-0.90</span>},
+		{<span class="hljs-number" style="color: rgb(136, 0, 0);">0.85</span>, <span class="hljs-number" style="color: rgb(136, 0, 0);">-0.90</span>},
+		{<span class="hljs-number" style="color: rgb(136, 0, 0);">-0.90</span>, <span class="hljs-number" style="color: rgb(136, 0, 0);">0.85</span>},
+		<span class="hljs-comment" style="color: rgb(136, 136, 136);">// Triangle 2</span>
+		{<span class="hljs-number" style="color: rgb(136, 0, 0);">0.90</span>, <span class="hljs-number" style="color: rgb(136, 0, 0);">-0.85</span>},
+		{<span class="hljs-number" style="color: rgb(136, 0, 0);">0.90</span>, <span class="hljs-number" style="color: rgb(136, 0, 0);">0.90</span>},
+		{<span class="hljs-number" style="color: rgb(136, 0, 0);">-0.85</span>, <span class="hljs-number" style="color: rgb(136, 0, 0);">0.90</span>},
+	}
+
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">//              |</span>
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">//              |</span>
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">// +-------------------------+</span>
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">// |                         |</span>
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">// |  Create one VAO         |</span>
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">// |                         |</span>
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">// +------------|------------+</span>
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">//              |</span>
+
+	<span class="hljs-keyword" style="font-weight: 700;">var</span> one <span class="hljs-keyword" style="font-weight: 700;">int32</span> = <span class="hljs-number" style="color: rgb(136, 0, 0);">1</span>
+	<span class="hljs-keyword" style="font-weight: 700;">var</span> theVAO <span class="hljs-keyword" style="font-weight: 700;">uint32</span>
+	gl.GenVertexArrays(one, &amp;theVAO)
+	gl.BindVertexArray(theVAO)
+
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">//              |</span>
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">//              |</span>
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">// +-------------------------+</span>
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">// |                         |</span>
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">// |  Create one Buffer      |</span>
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">// |                         |</span>
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">// +------------|------------+</span>
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">//              |</span>
+
+	<span class="hljs-keyword" style="font-weight: 700;">var</span> theArrayBuffer <span class="hljs-keyword" style="font-weight: 700;">uint32</span>
+	gl.GenBuffers(one, &amp;theArrayBuffer)
+	gl.BindBuffer(gl.ARRAY_BUFFER, theArrayBuffer)
+
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">//              |</span>
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">// +-------------------------+</span>
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">// |                         |</span>
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">// | Allocate memory on GPU  |</span>
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">// | and copy the vertices   |</span>
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">// | to that memory          |</span>
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">// |                         |</span>
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">// +-------------------------+</span>
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">//              |</span>
+
+	gl.BufferData(gl.ARRAY_BUFFER, <span class="hljs-keyword" style="font-weight: 700;">int</span>(unsafe.Sizeof(vertices)), unsafe.Pointer(&amp;vertices), gl.STATIC_DRAW)
+
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">//              |</span>
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">// +-------------------------+</span>
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">// |                         |</span>
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">// | Describe the format of  |</span>
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">// | the vertex data. Size,  |</span>
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">// | type, stride, etc       |</span>
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">// |                         |</span>
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">// +------------|------------+</span>
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">//              |</span>
+
+	<span class="hljs-keyword" style="font-weight: 700;">var</span> vPosition <span class="hljs-keyword" style="font-weight: 700;">uint32</span> = <span class="hljs-number" style="color: rgb(136, 0, 0);">0</span>
+	gl.VertexAttribPointer(vPosition, <span class="hljs-number" style="color: rgb(136, 0, 0);">2</span>, gl.FLOAT, <span class="hljs-literal" style="color: rgb(120, 169, 96);">false</span>, <span class="hljs-number" style="color: rgb(136, 0, 0);">0</span>, gl.PtrOffset(<span class="hljs-number" style="color: rgb(136, 0, 0);">0</span>))
+
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">//              |</span>
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">//              |</span>
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">// +-------------------------+</span>
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">// |                         |</span>
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">// | Use vPosition in Shader |</span>
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">// |                         |</span>
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">// +------------|------------+</span>
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">//              |</span>
+
+	gl.EnableVertexAttribArray(vPosition)
+
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">//              |</span>
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">//              |</span>
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">// +-------------------------+</span>
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">// |                         |</span>
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">// | Define a "Clear" colour |</span>
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">// | Black in this case      |</span>
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">// |                         |</span>
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">// +------------|------------+</span>
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">//              |</span>
+
+	<span class="hljs-keyword" style="font-weight: 700;">type</span> vec4 [<span class="hljs-number" style="color: rgb(136, 0, 0);">4</span>]<span class="hljs-keyword" style="font-weight: 700;">float32</span>
+	black := vec4{<span class="hljs-number" style="color: rgb(136, 0, 0);">0</span>, <span class="hljs-number" style="color: rgb(136, 0, 0);">0</span>, <span class="hljs-number" style="color: rgb(136, 0, 0);">0</span>, <span class="hljs-number" style="color: rgb(136, 0, 0);">1</span>}
+
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">//              |</span>
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">//              |</span>
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">// +-------------------------+</span>
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">// |                         |</span>
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">// | Loop until the window   |</span>
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">// | is closed               |</span>
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">// |                         |</span>
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">// +------------|------------+</span>
+	<span class="hljs-comment" style="color: rgb(136, 136, 136);">//              |</span>
+
+	<span class="hljs-keyword" style="font-weight: 700;">for</span> !win.ShouldClose() {
+		<span class="hljs-comment" style="color: rgb(136, 136, 136);">// t0 := time.Now()</span>
+
+		<span class="hljs-comment" style="color: rgb(136, 136, 136);">//              |</span>
+		<span class="hljs-comment" style="color: rgb(136, 136, 136);">//              |</span>
+		<span class="hljs-comment" style="color: rgb(136, 136, 136);">// +-------------------------+</span>
+		<span class="hljs-comment" style="color: rgb(136, 136, 136);">// |                         |</span>
+		<span class="hljs-comment" style="color: rgb(136, 136, 136);">// |     Clear buffer 0      |</span>
+		<span class="hljs-comment" style="color: rgb(136, 136, 136);">// |                         |</span>
+		<span class="hljs-comment" style="color: rgb(136, 136, 136);">// +------------|------------+</span>
+		<span class="hljs-comment" style="color: rgb(136, 136, 136);">//              |</span>
+
+		gl.ClearBufferfv(gl.COLOR, <span class="hljs-number" style="color: rgb(136, 0, 0);">0</span>, &amp;black[<span class="hljs-number" style="color: rgb(136, 0, 0);">0</span>])
+
+		<span class="hljs-comment" style="color: rgb(136, 136, 136);">//              |</span>
+		<span class="hljs-comment" style="color: rgb(136, 136, 136);">//              |</span>
+		<span class="hljs-comment" style="color: rgb(136, 136, 136);">// +-------------------------+</span>
+		<span class="hljs-comment" style="color: rgb(136, 136, 136);">// |                         |</span>
+		<span class="hljs-comment" style="color: rgb(136, 136, 136);">// |  Draw the vertices as   |</span>
+		<span class="hljs-comment" style="color: rgb(136, 136, 136);">// |  triangles              |</span>
+		<span class="hljs-comment" style="color: rgb(136, 136, 136);">// |                         |</span>
+		<span class="hljs-comment" style="color: rgb(136, 136, 136);">// +------------|------------+</span>
+		<span class="hljs-comment" style="color: rgb(136, 136, 136);">//              |</span>
+
+		gl.DrawArrays(gl.TRIANGLES, <span class="hljs-number" style="color: rgb(136, 0, 0);">0</span>, <span class="hljs-number" style="color: rgb(136, 0, 0);">6</span>)
+
+		<span class="hljs-comment" style="color: rgb(136, 136, 136);">//              |</span>
+		<span class="hljs-comment" style="color: rgb(136, 136, 136);">//              |</span>
+		<span class="hljs-comment" style="color: rgb(136, 136, 136);">// +-------------------------+</span>
+		<span class="hljs-comment" style="color: rgb(136, 136, 136);">// |                         |</span>
+		<span class="hljs-comment" style="color: rgb(136, 136, 136);">// |  Make what we have      |</span>
+		<span class="hljs-comment" style="color: rgb(136, 136, 136);">// |  drawn so far visible   |</span>
+		<span class="hljs-comment" style="color: rgb(136, 136, 136);">// |                         |</span>
+		<span class="hljs-comment" style="color: rgb(136, 136, 136);">// |  Swaps the front and    |</span>
+		<span class="hljs-comment" style="color: rgb(136, 136, 136);">// |  back buffers of the    |</span>
+		<span class="hljs-comment" style="color: rgb(136, 136, 136);">// |  window                 |</span>
+		<span class="hljs-comment" style="color: rgb(136, 136, 136);">// |                         |</span>
+		<span class="hljs-comment" style="color: rgb(136, 136, 136);">// +------------|------------+</span>
+		<span class="hljs-comment" style="color: rgb(136, 136, 136);">//              |</span>
+
+		win.SwapBuffers()
+
+		<span class="hljs-comment" style="color: rgb(136, 136, 136);">//              |</span>
+		<span class="hljs-comment" style="color: rgb(136, 136, 136);">//              |</span>
+		<span class="hljs-comment" style="color: rgb(136, 136, 136);">// +-------------------------+</span>
+		<span class="hljs-comment" style="color: rgb(136, 136, 136);">// |                         |</span>
+		<span class="hljs-comment" style="color: rgb(136, 136, 136);">// | See what's going on     |</span>
+		<span class="hljs-comment" style="color: rgb(136, 136, 136);">// |                         |</span>
+		<span class="hljs-comment" style="color: rgb(136, 136, 136);">// +------------|------------+</span>
+		<span class="hljs-comment" style="color: rgb(136, 136, 136);">//              |</span>
+
+		glfw.PollEvents()
+	}
+}
+</pre>
