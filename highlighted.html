@@ -1,0 +1,329 @@
+
+<pre style="color:#000000;background:#ffffff;"><span style="color:#800000; font-weight:bold; ">package</span> main
+
+import <span style="color:#808030; ">(</span>
+	"fmt"
+
+	"runtime"
+	"strings"
+	"unsafe"
+
+	"github<span style="color:#808030; ">.</span>com<span style="color:#808030; ">/</span>go<span style="color:#808030; ">-</span>gl<span style="color:#808030; ">/</span>gl<span style="color:#808030; ">/</span>v4<span style="color:#808030; ">.</span><span style="color:#008c00; ">6</span><span style="color:#808030; ">-</span>core<span style="color:#808030; ">/</span>gl"
+	"github<span style="color:#808030; ">.</span>com<span style="color:#808030; ">/</span>go<span style="color:#808030; ">-</span>gl<span style="color:#808030; ">/</span>glfw<span style="color:#808030; ">/</span>v3<span style="color:#808030; ">.</span><span style="color:#008c00; ">3</span><span style="color:#808030; ">/</span>glfw"
+<span style="color:#808030; ">)</span>
+
+func getWindowFromGLFW<span style="color:#808030; ">(</span>title <span style="color:#bb7977; ">string</span><span style="color:#808030; ">)</span> <span style="color:#808030; ">*</span>glfw<span style="color:#808030; ">.</span>Window <span style="color:#696969; ">{</span>
+<span style="color:#696969; ">	runtime.LockOSThread()</span>
+<span style="color:#696969; "></span>
+<span style="color:#696969; ">	if err := glfw.Init(); err != nil {</span>
+<span style="color:#696969; ">		panic(fmt.Errorf("could not initialize glfw: %v", err))</span>
+<span style="color:#696969; ">	}</span>
+
+	glfw<span style="color:#808030; ">.</span>WindowHint<span style="color:#808030; ">(</span>glfw<span style="color:#808030; ">.</span>ContextVersionMajor<span style="color:#808030; ">,</span> <span style="color:#008c00; ">4</span><span style="color:#808030; ">)</span>
+	glfw<span style="color:#808030; ">.</span>WindowHint<span style="color:#808030; ">(</span>glfw<span style="color:#808030; ">.</span>ContextVersionMinor<span style="color:#808030; ">,</span> <span style="color:#008c00; ">6</span><span style="color:#808030; ">)</span>
+	glfw<span style="color:#808030; ">.</span>WindowHint<span style="color:#808030; ">(</span>glfw<span style="color:#808030; ">.</span>Resizable<span style="color:#808030; ">,</span> glfw<span style="color:#808030; ">.</span><span style="color:#7d0045; ">True</span><span style="color:#808030; ">)</span>
+	glfw<span style="color:#808030; ">.</span>WindowHint<span style="color:#808030; ">(</span>glfw<span style="color:#808030; ">.</span>OpenGLProfile<span style="color:#808030; ">,</span> glfw<span style="color:#808030; ">.</span>OpenGLCoreProfile<span style="color:#808030; ">)</span>
+	glfw<span style="color:#808030; ">.</span>WindowHint<span style="color:#808030; ">(</span>glfw<span style="color:#808030; ">.</span>OpenGLForwardCompatible<span style="color:#808030; ">,</span> glfw<span style="color:#808030; ">.</span><span style="color:#7d0045; ">True</span><span style="color:#808030; ">)</span>
+
+	win<span style="color:#808030; ">,</span> err <span style="color:#808030; ">:</span><span style="color:#808030; ">=</span> glfw<span style="color:#808030; ">.</span>CreateWindow<span style="color:#808030; ">(</span><span style="color:#008c00; ">800</span><span style="color:#808030; ">,</span> <span style="color:#008c00; ">600</span><span style="color:#808030; ">,</span> title<span style="color:#808030; ">,</span> <span style="color:#7d0045; ">nil</span><span style="color:#808030; ">,</span> <span style="color:#7d0045; ">nil</span><span style="color:#808030; ">)</span>
+
+	<span style="color:#800000; font-weight:bold; ">if</span> err !<span style="color:#808030; ">=</span> <span style="color:#7d0045; ">nil</span> <span style="color:#696969; ">{</span>
+<span style="color:#696969; ">		panic(fmt.Errorf("could not create opengl renderer: %v", err))</span>
+<span style="color:#696969; ">	}</span>
+
+	win<span style="color:#808030; ">.</span>MakeContextCurrent<span style="color:#808030; ">(</span><span style="color:#808030; ">)</span>
+
+	<span style="color:#800000; font-weight:bold; ">if</span> err <span style="color:#808030; ">:</span><span style="color:#808030; ">=</span> gl<span style="color:#808030; ">.</span>Init<span style="color:#808030; ">(</span><span style="color:#808030; ">)</span><span style="color:#800080; ">;</span> err !<span style="color:#808030; ">=</span> <span style="color:#7d0045; ">nil</span> <span style="color:#696969; ">{</span>
+<span style="color:#696969; ">		panic(err)</span>
+<span style="color:#696969; ">	}</span>
+
+	return win
+}
+
+<span style="color:#800000; font-weight:bold; ">var</span> vertexShader <span style="color:#808030; ">=</span> `
+<span style="color:#808030; ">#</span>version <span style="color:#008c00; ">430</span> core
+
+layout <span style="color:#808030; ">(</span>location <span style="color:#808030; ">=</span> <span style="color:#008c00; ">0</span><span style="color:#808030; ">)</span> <span style="color:#800000; font-weight:bold; ">in</span> vec4 vPosition<span style="color:#800080; ">;</span>
+
+void main<span style="color:#808030; ">(</span><span style="color:#808030; ">)</span>
+<span style="color:#696969; ">{</span>
+<span style="color:#696969; ">	gl_Position = vPosition;</span>
+<span style="color:#696969; ">}</span>
+` <span style="color:#808030; ">+</span> "\x00"
+
+<span style="color:#800000; font-weight:bold; ">var</span> fragmentShader <span style="color:#808030; ">=</span> `
+<span style="color:#808030; ">#</span>version <span style="color:#008c00; ">430</span> core
+
+<span style="color:#800000; font-weight:bold; ">out</span> vec4 color<span style="color:#800080; ">;</span>
+
+void main<span style="color:#808030; ">(</span><span style="color:#808030; ">)</span> <span style="color:#696969; ">{</span>
+<span style="color:#696969; ">&nbsp;&nbsp;&nbsp;&nbsp;color = vec4(0.0, 0.8, 1.0, 1.0);</span>
+<span style="color:#696969; ">}</span>
+` <span style="color:#808030; ">+</span> "\x00"
+
+func compileShader<span style="color:#808030; ">(</span>source <span style="color:#bb7977; ">string</span><span style="color:#808030; ">,</span> shaderType uint32<span style="color:#808030; ">)</span> <span style="color:#808030; ">(</span>uint32<span style="color:#808030; ">,</span> error<span style="color:#808030; ">)</span> <span style="color:#696969; ">{</span>
+<span style="color:#696969; ">	shader := gl.CreateShader(shaderType)</span>
+<span style="color:#696969; "></span>
+<span style="color:#696969; ">	csources, free := gl.Strs(source)</span>
+<span style="color:#696969; ">	gl.ShaderSource(shader, 1, csources, nil)</span>
+<span style="color:#696969; ">	free()</span>
+<span style="color:#696969; ">	gl.CompileShader(shader)</span>
+<span style="color:#696969; "></span>
+<span style="color:#696969; ">	// Check for errors</span>
+<span style="color:#696969; ">	var status int32</span>
+<span style="color:#696969; ">	gl.GetShaderiv(shader, gl.COMPILE_STATUS, &amp;status)</span>
+<span style="color:#696969; ">	if status == gl.FALSE {</span>
+<span style="color:#696969; ">		// How many bytes to allocate</span>
+<span style="color:#696969; ">		var logLength int32</span>
+<span style="color:#696969; ">		gl.GetShaderiv(shader, gl.INFO_LOG_LENGTH, &amp;logLength)</span>
+<span style="color:#696969; "></span>
+<span style="color:#696969; ">		log := strings.Repeat("\x00", int(logLength+1))</span>
+<span style="color:#696969; "></span>
+<span style="color:#696969; ">		gl.GetShaderInfoLog(shader, logLength, nil, gl.Str(log))</span>
+<span style="color:#696969; ">		fmt.Println("compileShader log")</span>
+<span style="color:#696969; ">		fmt.Println(log)</span>
+<span style="color:#696969; "></span>
+<span style="color:#696969; ">		return 0, fmt.Errorf("failed to compile %v: %v", source, log)</span>
+<span style="color:#696969; ">	}</span>
+
+	return shader<span style="color:#808030; ">,</span> <span style="color:#7d0045; ">nil</span>
+}
+
+func newProgram<span style="color:#808030; ">(</span>vertexShaderSource<span style="color:#808030; ">,</span> fragmentShaderSource <span style="color:#bb7977; ">string</span><span style="color:#808030; ">)</span> <span style="color:#808030; ">(</span>uint32<span style="color:#808030; ">,</span> error<span style="color:#808030; ">)</span> <span style="color:#696969; ">{</span>
+<span style="color:#696969; ">	vertexShader, err := compileShader(vertexShaderSource, gl.VERTEX_SHADER)</span>
+<span style="color:#696969; ">	if err != nil {</span>
+<span style="color:#696969; ">		fmt.Println("Vertex Compile Error")</span>
+<span style="color:#696969; ">		fmt.Println(err)</span>
+<span style="color:#696969; ">		return 0, err</span>
+<span style="color:#696969; ">	}</span>
+
+	fragmentShader<span style="color:#808030; ">,</span> err <span style="color:#808030; ">:</span><span style="color:#808030; ">=</span> compileShader<span style="color:#808030; ">(</span>fragmentShaderSource<span style="color:#808030; ">,</span> gl<span style="color:#808030; ">.</span>FRAGMENT_SHADER<span style="color:#808030; ">)</span>
+	<span style="color:#800000; font-weight:bold; ">if</span> err !<span style="color:#808030; ">=</span> <span style="color:#7d0045; ">nil</span> <span style="color:#696969; ">{</span>
+<span style="color:#696969; ">		return 0, err</span>
+<span style="color:#696969; ">	}</span>
+
+	<span style="color:#800000; font-weight:bold; ">program</span> <span style="color:#808030; ">:</span><span style="color:#808030; ">=</span> gl<span style="color:#808030; ">.</span>CreateProgram<span style="color:#808030; ">(</span><span style="color:#808030; ">)</span>
+
+	gl<span style="color:#808030; ">.</span>AttachShader<span style="color:#808030; ">(</span><span style="color:#800000; font-weight:bold; ">program</span><span style="color:#808030; ">,</span> vertexShader<span style="color:#808030; ">)</span>
+	gl<span style="color:#808030; ">.</span>AttachShader<span style="color:#808030; ">(</span><span style="color:#800000; font-weight:bold; ">program</span><span style="color:#808030; ">,</span> fragmentShader<span style="color:#808030; ">)</span>
+	gl<span style="color:#808030; ">.</span>LinkProgram<span style="color:#808030; ">(</span><span style="color:#800000; font-weight:bold; ">program</span><span style="color:#808030; ">)</span>
+
+	<span style="color:#800000; font-weight:bold; ">var</span> status int32
+	gl<span style="color:#808030; ">.</span>GetProgramiv<span style="color:#808030; ">(</span><span style="color:#800000; font-weight:bold; ">program</span><span style="color:#808030; ">,</span> gl<span style="color:#808030; ">.</span>LINK_STATUS<span style="color:#808030; ">,</span> &amp;status<span style="color:#808030; ">)</span>
+	<span style="color:#800000; font-weight:bold; ">if</span> status <span style="color:#808030; ">=</span><span style="color:#808030; ">=</span> gl<span style="color:#808030; ">.</span><span style="color:#7d0045; ">FALSE</span> <span style="color:#696969; ">{</span>
+<span style="color:#696969; ">		var logLength int32</span>
+<span style="color:#696969; ">		gl.GetProgramiv(program, gl.INFO_LOG_LENGTH, &amp;logLength)</span>
+<span style="color:#696969; "></span>
+<span style="color:#696969; ">		log := strings.Repeat("\x00", int(logLength+1))</span>
+<span style="color:#696969; ">		gl.GetProgramInfoLog(program, logLength, nil, gl.Str(log))</span>
+<span style="color:#696969; "></span>
+<span style="color:#696969; ">		return 0, fmt.Errorf("failed to link program: %v", log)</span>
+<span style="color:#696969; ">	}</span>
+
+	gl<span style="color:#808030; ">.</span>DeleteShader<span style="color:#808030; ">(</span>vertexShader<span style="color:#808030; ">)</span>
+	gl<span style="color:#808030; ">.</span>DeleteShader<span style="color:#808030; ">(</span>fragmentShader<span style="color:#808030; ">)</span>
+
+	return <span style="color:#800000; font-weight:bold; ">program</span><span style="color:#808030; ">,</span> <span style="color:#7d0045; ">nil</span>
+}
+
+func main<span style="color:#808030; ">(</span><span style="color:#808030; ">)</span> <span style="color:#696969; ">{</span>
+<span style="color:#696969; "></span>
+<span style="color:#696969; ">	//              |</span>
+<span style="color:#696969; ">	//              |</span>
+<span style="color:#696969; ">	// +-------------------------+</span>
+<span style="color:#696969; ">	// |                         |</span>
+<span style="color:#696969; ">	// |   Create a Window       |</span>
+<span style="color:#696969; ">	// |                         |</span>
+<span style="color:#696969; ">	// +------------|------------+</span>
+<span style="color:#696969; ">	//              |</span>
+<span style="color:#696969; "></span>
+<span style="color:#696969; ">	win := getWindowFromGLFW("Hello GoPenGLSLang")</span>
+<span style="color:#696969; "></span>
+<span style="color:#696969; ">	//              |</span>
+<span style="color:#696969; ">	//              |</span>
+<span style="color:#696969; ">	// +-------------------------+</span>
+<span style="color:#696969; ">	// |                         |</span>
+<span style="color:#696969; ">	// |   Create the Shader     |</span>
+<span style="color:#696969; ">	// |                         |</span>
+<span style="color:#696969; ">	// +------------|------------+</span>
+<span style="color:#696969; ">	//              |</span>
+<span style="color:#696969; "></span>
+<span style="color:#696969; ">	shader, err := newProgram(vertexShader, fragmentShader)</span>
+<span style="color:#696969; ">	if err != nil {</span>
+<span style="color:#696969; ">		panic(err)</span>
+<span style="color:#696969; ">	}</span>
+	defer gl<span style="color:#808030; ">.</span>DeleteProgram<span style="color:#808030; ">(</span>shader<span style="color:#808030; ">)</span>
+
+	<span style="color:#696969; ">//              |</span>
+	<span style="color:#696969; ">//              |</span>
+	<span style="color:#696969; ">// +-------------------------+</span>
+	<span style="color:#696969; ">// |                         |</span>
+	<span style="color:#696969; ">// |   Load the Shader       |</span>
+	<span style="color:#696969; ">// |                         |</span>
+	<span style="color:#696969; ">// +------------|------------+</span>
+	<span style="color:#696969; ">//              |</span>
+
+	gl<span style="color:#808030; ">.</span>UseProgram<span style="color:#808030; ">(</span>shader<span style="color:#808030; ">)</span>
+
+	<span style="color:#696969; ">//              |</span>
+	<span style="color:#696969; ">//              |</span>
+	<span style="color:#696969; ">// +-------------------------+</span>
+	<span style="color:#696969; ">// |                         |</span>
+	<span style="color:#696969; ">// | Define two triangles    |</span>
+	<span style="color:#696969; ">// | Requires 6 vertices     |</span>
+	<span style="color:#696969; ">// |                         |</span>
+	<span style="color:#696969; ">// +------------|------------+</span>
+	<span style="color:#696969; ">//              |</span>
+
+	<span style="color:#800000; font-weight:bold; ">var</span> vertices <span style="color:#808030; ">=</span> <span style="color:#808030; ">[</span><span style="color:#008c00; ">6</span><span style="color:#808030; ">]</span><span style="color:#808030; ">[</span><span style="color:#008c00; ">2</span><span style="color:#808030; ">]</span>float32<span style="color:#696969; ">{</span>
+<span style="color:#696969; ">		// Triangle 1</span>
+<span style="color:#696969; ">		{-0.90, -0.90}</span><span style="color:#808030; ">,</span>
+		<span style="color:#696969; ">{0.85, -0.90}</span><span style="color:#808030; ">,</span>
+		<span style="color:#696969; ">{-0.90, 0.85}</span><span style="color:#808030; ">,</span>
+		<span style="color:#696969; ">// Triangle 2</span>
+		<span style="color:#696969; ">{0.90, -0.85}</span><span style="color:#808030; ">,</span>
+		<span style="color:#696969; ">{0.90, 0.90}</span><span style="color:#808030; ">,</span>
+		<span style="color:#696969; ">{-0.85, 0.90}</span><span style="color:#808030; ">,</span>
+	}
+
+	<span style="color:#696969; ">//              |</span>
+	<span style="color:#696969; ">//              |</span>
+	<span style="color:#696969; ">// +-------------------------+</span>
+	<span style="color:#696969; ">// |                         |</span>
+	<span style="color:#696969; ">// |  Create one VAO         |</span>
+	<span style="color:#696969; ">// |                         |</span>
+	<span style="color:#696969; ">// +------------|------------+</span>
+	<span style="color:#696969; ">//              |</span>
+
+	<span style="color:#800000; font-weight:bold; ">var</span> one int32 <span style="color:#808030; ">=</span> <span style="color:#008c00; ">1</span>
+	<span style="color:#800000; font-weight:bold; ">var</span> theVAO uint32
+	gl<span style="color:#808030; ">.</span>GenVertexArrays<span style="color:#808030; ">(</span>one<span style="color:#808030; ">,</span> &amp;theVAO<span style="color:#808030; ">)</span>
+	gl<span style="color:#808030; ">.</span>BindVertexArray<span style="color:#808030; ">(</span>theVAO<span style="color:#808030; ">)</span>
+
+	<span style="color:#696969; ">//              |</span>
+	<span style="color:#696969; ">//              |</span>
+	<span style="color:#696969; ">// +-------------------------+</span>
+	<span style="color:#696969; ">// |                         |</span>
+	<span style="color:#696969; ">// |  Create one Buffer      |</span>
+	<span style="color:#696969; ">// |                         |</span>
+	<span style="color:#696969; ">// +------------|------------+</span>
+	<span style="color:#696969; ">//              |</span>
+
+	<span style="color:#800000; font-weight:bold; ">var</span> theArrayBuffer uint32
+	gl<span style="color:#808030; ">.</span>GenBuffers<span style="color:#808030; ">(</span>one<span style="color:#808030; ">,</span> &amp;theArrayBuffer<span style="color:#808030; ">)</span>
+	gl<span style="color:#808030; ">.</span>BindBuffer<span style="color:#808030; ">(</span>gl<span style="color:#808030; ">.</span>ARRAY_BUFFER<span style="color:#808030; ">,</span> theArrayBuffer<span style="color:#808030; ">)</span>
+
+	<span style="color:#696969; ">//              |</span>
+	<span style="color:#696969; ">// +-------------------------+</span>
+	<span style="color:#696969; ">// |                         |</span>
+	<span style="color:#696969; ">// | Allocate memory on GPU  |</span>
+	<span style="color:#696969; ">// | and copy the vertices   |</span>
+	<span style="color:#696969; ">// | to that memory          |</span>
+	<span style="color:#696969; ">// |                         |</span>
+	<span style="color:#696969; ">// +-------------------------+</span>
+	<span style="color:#696969; ">//              |</span>
+
+	gl<span style="color:#808030; ">.</span>BufferData<span style="color:#808030; ">(</span>gl<span style="color:#808030; ">.</span>ARRAY_BUFFER<span style="color:#808030; ">,</span> int<span style="color:#808030; ">(</span>unsafe<span style="color:#808030; ">.</span>Sizeof<span style="color:#808030; ">(</span>vertices<span style="color:#808030; ">)</span><span style="color:#808030; ">)</span><span style="color:#808030; ">,</span> unsafe<span style="color:#808030; ">.</span><span style="color:#bb7977; ">Pointer</span><span style="color:#808030; ">(</span>&amp;vertices<span style="color:#808030; ">)</span><span style="color:#808030; ">,</span> gl<span style="color:#808030; ">.</span>STATIC_DRAW<span style="color:#808030; ">)</span>
+
+	<span style="color:#696969; ">//              |</span>
+	<span style="color:#696969; ">// +-------------------------+</span>
+	<span style="color:#696969; ">// |                         |</span>
+	<span style="color:#696969; ">// | Describe the format of  |</span>
+	<span style="color:#696969; ">// | the vertex data. Size,  |</span>
+	<span style="color:#696969; ">// | type, stride, etc       |</span>
+	<span style="color:#696969; ">// |                         |</span>
+	<span style="color:#696969; ">// +------------|------------+</span>
+	<span style="color:#696969; ">//              |</span>
+
+	<span style="color:#800000; font-weight:bold; ">var</span> vPosition uint32 <span style="color:#808030; ">=</span> <span style="color:#008c00; ">0</span>
+	gl<span style="color:#808030; ">.</span>VertexAttribPointer<span style="color:#808030; ">(</span>vPosition<span style="color:#808030; ">,</span> <span style="color:#008c00; ">2</span><span style="color:#808030; ">,</span> gl<span style="color:#808030; ">.</span>FLOAT<span style="color:#808030; ">,</span> <span style="color:#7d0045; ">false</span><span style="color:#808030; ">,</span> <span style="color:#008c00; ">0</span><span style="color:#808030; ">,</span> gl<span style="color:#808030; ">.</span>PtrOffset<span style="color:#808030; ">(</span><span style="color:#008c00; ">0</span><span style="color:#808030; ">)</span><span style="color:#808030; ">)</span>
+
+	<span style="color:#696969; ">//              |</span>
+	<span style="color:#696969; ">//              |</span>
+	<span style="color:#696969; ">// +-------------------------+</span>
+	<span style="color:#696969; ">// |                         |</span>
+	<span style="color:#696969; ">// | Use vPosition in Shader |</span>
+	<span style="color:#696969; ">// |                         |</span>
+	<span style="color:#696969; ">// +------------|------------+</span>
+	<span style="color:#696969; ">//              |</span>
+
+	gl<span style="color:#808030; ">.</span>EnableVertexAttribArray<span style="color:#808030; ">(</span>vPosition<span style="color:#808030; ">)</span>
+
+	<span style="color:#696969; ">//              |</span>
+	<span style="color:#696969; ">//              |</span>
+	<span style="color:#696969; ">// +-------------------------+</span>
+	<span style="color:#696969; ">// |                         |</span>
+	<span style="color:#696969; ">// | Define a "Clear" colour |</span>
+	<span style="color:#696969; ">// | Black in this case      |</span>
+	<span style="color:#696969; ">// |                         |</span>
+	<span style="color:#696969; ">// +------------|------------+</span>
+	<span style="color:#696969; ">//              |</span>
+
+	<span style="color:#800000; font-weight:bold; ">type</span> vec4 <span style="color:#808030; ">[</span><span style="color:#008c00; ">4</span><span style="color:#808030; ">]</span>float32
+	black <span style="color:#808030; ">:</span><span style="color:#808030; ">=</span> vec4<span style="color:#696969; ">{0, 0, 0, 1}</span>
+
+	<span style="color:#696969; ">//              |</span>
+	<span style="color:#696969; ">//              |</span>
+	<span style="color:#696969; ">// +-------------------------+</span>
+	<span style="color:#696969; ">// |                         |</span>
+	<span style="color:#696969; ">// | Loop until the window   |</span>
+	<span style="color:#696969; ">// | is closed               |</span>
+	<span style="color:#696969; ">// |                         |</span>
+	<span style="color:#696969; ">// +------------|------------+</span>
+	<span style="color:#696969; ">//              |</span>
+
+	<span style="color:#800000; font-weight:bold; ">for</span> !win<span style="color:#808030; ">.</span>ShouldClose<span style="color:#808030; ">(</span><span style="color:#808030; ">)</span> <span style="color:#696969; ">{</span>
+<span style="color:#696969; ">		// t0 := time.Now()</span>
+<span style="color:#696969; "></span>
+<span style="color:#696969; ">		//              |</span>
+<span style="color:#696969; ">		//              |</span>
+<span style="color:#696969; ">		// +-------------------------+</span>
+<span style="color:#696969; ">		// |                         |</span>
+<span style="color:#696969; ">		// |     Clear buffer 0      |</span>
+<span style="color:#696969; ">		// |                         |</span>
+<span style="color:#696969; ">		// +------------|------------+</span>
+<span style="color:#696969; ">		//              |</span>
+<span style="color:#696969; "></span>
+<span style="color:#696969; ">		gl.ClearBufferfv(gl.COLOR, 0, &amp;black[0])</span>
+<span style="color:#696969; "></span>
+<span style="color:#696969; ">		//              |</span>
+<span style="color:#696969; ">		//              |</span>
+<span style="color:#696969; ">		// +-------------------------+</span>
+<span style="color:#696969; ">		// |                         |</span>
+<span style="color:#696969; ">		// |  Draw the vertices as   |</span>
+<span style="color:#696969; ">		// |  triangles              |</span>
+<span style="color:#696969; ">		// |                         |</span>
+<span style="color:#696969; ">		// +------------|------------+</span>
+<span style="color:#696969; ">		//              |</span>
+<span style="color:#696969; "></span>
+<span style="color:#696969; ">		gl.DrawArrays(gl.TRIANGLES, 0, 6)</span>
+<span style="color:#696969; "></span>
+<span style="color:#696969; ">		//              |</span>
+<span style="color:#696969; ">		//              |</span>
+<span style="color:#696969; ">		// +-------------------------+</span>
+<span style="color:#696969; ">		// |                         |</span>
+<span style="color:#696969; ">		// |  Make what we have      |</span>
+<span style="color:#696969; ">		// |  drawn so far visible   |</span>
+<span style="color:#696969; ">		// |                         |</span>
+<span style="color:#696969; ">		// |  Swaps the front and    |</span>
+<span style="color:#696969; ">		// |  back buffers of the    |</span>
+<span style="color:#696969; ">		// |  window                 |</span>
+<span style="color:#696969; ">		// |                         |</span>
+<span style="color:#696969; ">		// +------------|------------+</span>
+<span style="color:#696969; ">		//              |</span>
+<span style="color:#696969; "></span>
+<span style="color:#696969; ">		win.SwapBuffers()</span>
+<span style="color:#696969; "></span>
+<span style="color:#696969; ">		//              |</span>
+<span style="color:#696969; ">		//              |</span>
+<span style="color:#696969; ">		// +-------------------------+</span>
+<span style="color:#696969; ">		// |                         |</span>
+<span style="color:#696969; ">		// | See what's going on     |</span>
+<span style="color:#696969; ">		// |                         |</span>
+<span style="color:#696969; ">		// +------------|------------+</span>
+<span style="color:#696969; ">		//              |</span>
+<span style="color:#696969; "></span>
+<span style="color:#696969; ">		glfw.PollEvents()</span>
+<span style="color:#696969; ">	}</span>
+}
+</pre>
